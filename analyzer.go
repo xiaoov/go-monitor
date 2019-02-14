@@ -2,8 +2,6 @@ package monitor
 
 import (
 	"time"
-	"strconv"
-	"strings"
 )
 
 // 一个时间周期内最终统计输出的数据
@@ -20,8 +18,8 @@ type OutPutData struct {
 	SuccessCount uint32 `json:"successCount"`
 	// 成功率
 	SuccessRate float64	`json:"successRate"`
-	// 成功平均耗时
-	SuccessMsAver uint32 `json:"successMsAver"`
+	// 平均耗时
+	AverageTimeInUs uint32 `json:"averageTimeInUs"`
 	// 成功最大耗时
 	MaxMs uint32 `json:"maxMs"`
 	// 成功最小耗时
@@ -32,10 +30,12 @@ type OutPutData struct {
 	FastRate float64 `json:"fastRate"`
 	// 失败总数
 	FailCount uint32 `json:"failCount"`
+
+	Throughput float64 `json:"throughput"`
 	// 失败分布 按照状态码分
-	FailDistribution map[string]uint32 `json:"failDistribution"`
+	//FailDistribution map[string]uint32 `json:"failDistribution"`
 	// 时延分布情况
-	TimeConsumingDistribution map[string]uint32 `json:"timeConsumingDistribution"`
+	//TimeConsumingDistribution map[string]uint32 `json:"timeConsumingDistribution"`
 }
 
 // 存储一些最近状态，以用于实现告警、恢复等机制
@@ -74,59 +74,60 @@ func (c *ReportClientConfig) statistics() {
 		outputData.SuccessRate = float64(collectedData.SuccessCount) / float64(outputData.Count)
 		outputData.FastRate = float64(collectedData.FastCount) / float64(outputData.Count)
 		outputData.FastCount = collectedData.FastCount
-		outputData.SuccessMsAver = uint32(float64(collectedData.SuccessMsCount) / float64(outputData.Count))
+		outputData.AverageTimeInUs = uint32(float64(collectedData.SuccessMsCount + collectedData.FailMsCount) / float64(outputData.Count))
 		outputData.SuccessCount = collectedData.SuccessCount
 		outputData.FailCount = collectedData.FailCount
 		outputData.MaxMs = collectedData.MaxMs
 		outputData.MinMs = collectedData.MinMs
 		outputData.Timestamp = collectedData.Time.UTC()
-		outputData.TimeConsumingDistribution = map[string]uint32 {}
-		outputData.FailDistribution = map[string]uint32 {}
+		outputData.Throughput = float64(outputData.Count * 1000 / uint32(c.StatisticalCycle))
+		//outputData.TimeConsumingDistribution = map[string]uint32 {}
+		//outputData.FailDistribution = map[string]uint32 {}
 
 
 		// 时延分布统计
-		scope := (collectedData.Config.TimeConsumingDistributionMax - collectedData.Config.TimeConsumingDistributionMin) / uint32(collectedData.Config.TimeConsumingDistributionSplit - 2)
+		//scope := (collectedData.Config.TimeConsumingDistributionMax - collectedData.Config.TimeConsumingDistributionMin) / uint32(collectedData.Config.TimeConsumingDistributionSplit - 2)
 		// 计算第一个区间
-		outputData.TimeConsumingDistribution["<" + strconv.FormatUint(uint64(collectedData.Config.TimeConsumingDistributionMin), 10)] = collectedData.TimeConsumingDistribution[0]
-		// 计算最后一个区间
-		outputData.TimeConsumingDistribution[">" + strconv.FormatUint(uint64(collectedData.Config.TimeConsumingDistributionMax), 10)] = collectedData.TimeConsumingDistribution[collectedData.Config.TimeConsumingDistributionSplit - 1]
+		//outputData.TimeConsumingDistribution["<" + strconv.FormatUint(uint64(collectedData.Config.TimeConsumingDistributionMin), 10)] = collectedData.TimeConsumingDistribution[0]
+		//// 计算最后一个区间
+		//outputData.TimeConsumingDistribution[">" + strconv.FormatUint(uint64(collectedData.Config.TimeConsumingDistributionMax), 10)] = collectedData.TimeConsumingDistribution[collectedData.Config.TimeConsumingDistributionSplit - 1]
 		// 计算剩余区间
-		for i := 1; i < collectedData.Config.TimeConsumingDistributionSplit - 1; i++ {
-			start := int(collectedData.Config.TimeConsumingDistributionMin + uint32(i - 1) * scope)
-			var end int
-			if i == collectedData.Config.TimeConsumingDistributionSplit - 1 {
-				end = int(collectedData.Config.TimeConsumingDistributionMax)
-			} else {
-				end = int(collectedData.Config.TimeConsumingDistributionMin + uint32(i) * scope)
-			}
-			outputData.TimeConsumingDistribution[strconv.Itoa(start) + "~" + strconv.Itoa(end)] = collectedData.TimeConsumingDistribution[i]
-		}
+		//for i := 1; i < collectedData.Config.TimeConsumingDistributionSplit - 1; i++ {
+		//	start := int(collectedData.Config.TimeConsumingDistributionMin + uint32(i - 1) * scope)
+		//	var end int
+		//	if i == collectedData.Config.TimeConsumingDistributionSplit - 1 {
+		//		end = int(collectedData.Config.TimeConsumingDistributionMax)
+		//	} else {
+		//		end = int(collectedData.Config.TimeConsumingDistributionMin + uint32(i) * scope)
+		//	}
+			//outputData.TimeConsumingDistribution[strconv.Itoa(start) + "~" + strconv.Itoa(end)] = collectedData.TimeConsumingDistribution[i]
+		//}
 
 
 		// 失败分布统计
-		for status, count := range collectedData.FailDistribution {
-			var name string
-			if c.GetCodeFeature != nil {
-				_, name = c.GetCodeFeature(status)
-			} else if s, ok := c.CodeFeatureMap[status]; ok && s.Name != "" {
-				name = s.Name
-			}
-			if name != "" {
-				outputData.FailDistribution[name] = count
-			} else {
-				outputData.FailDistribution[strings.Replace(c.DefaultFailDistributionFormat, "%code", strconv.Itoa(status), 1)] = count
-			}
-		}
+		//for status, count := range collectedData.FailDistribution {
+		//	var name string
+		//	if c.GetCodeFeature != nil {
+		//		_, name = c.GetCodeFeature(status)
+		//	} else if s, ok := c.CodeFeatureMap[status]; ok && s.Name != "" {
+		//		name = s.Name
+		//	}
+		//	if name != "" {
+		//		outputData.FailDistribution[name] = count
+		//	} else {
+		//		outputData.FailDistribution[strings.Replace(c.DefaultFailDistributionFormat, "%code", strconv.Itoa(status), 1)] = count
+		//	}
+		//}
 
 		// 告警分析：由于告警分析存在对定制化告警函数的调用可能性，无法预估性能，所以启用新的gorouting去执行避免不可预测的风险
 		go c.alertAnalyze(collectedData.Name, outputData)
 
 		// 输出最终统计数据
-		if c.OutputCaller != nil {
-			// 同理，但凡外部自定义函数的调用应当启用新的gorouting去执行
-			go c.OutputCaller(&outputData)
-		}
-		defaultOutputCaller(&outputData)
+		//if c.OutputCaller != nil {
+		//	// 同理，但凡外部自定义函数的调用应当启用新的gorouting去执行
+		//	go c.OutputCaller(&outputData)
+		//}
+		monit(&outputData)
 	}
 }
 

@@ -1,8 +1,10 @@
 package monitor
 
 import (
+	"github.com/json-iterator/go"
+	"io"
+	"net/http"
 	"os"
-	"encoding/json"
 )
 
 type (
@@ -36,6 +38,8 @@ type ReportClient interface {
 	Report(name string, ms uint32, code int)
 	// 添加自定义条目配置，包括条目对应的耗时达标标准以及时延分布等数据
 	AddEntryConfig(name string, entryConfig EntryConfig)
+	//启动HTTP服务
+	StartMonitor(port string)
 }
 
 // 客户端的全局配置，一个客户端可能会上报若干个接口
@@ -67,7 +71,7 @@ type ReportClientConfig struct {
 	// 失败分布统计出报表时，如果没有在DefaultSuccessStatus定义过该状态的Name属性，将默认将DefaultFailDistributionFormat中的%code转化为对应的code并作为报表项，该值默认为"code[%code]"
 	DefaultFailDistributionFormat string
 	// 接受数据输出定制，默认输出到控制台
-	OutputCaller func(o *OutPutData)
+	//OutputCaller func(o *OutPutData)
 	// 告警处理方式定制，默认输出到控制台，目前alertType取值为FAIL代表成功率告警，SLOW代表耗时告警
 	AlertCaller func(clientName string, interfaceName string, alertType AlertType, recentOutputData []OutPutData)
 	// 恢复通知处理方式定制，同AlertCaller
@@ -155,13 +159,24 @@ func Register(c ReportClientConfig) ReportClient {
 	return client
 }
 
+func (c *ReportClientConfig)StartMonitor(port string) {
+
+	http.HandleFunc("/monitor/json", helloHandler)
+	http.ListenAndServe(":" + port, nil)
+}
+
+func helloHandler(w http.ResponseWriter, _ *http.Request) {
+	io.WriteString(w, backendJson)
+}
+
 // 默认输出回调函数，将直接打印到控制台
-func defaultOutputCaller(o *OutPutData) {
-	b, err := json.Marshal(*o)
+func monit(o *OutPutData) {
+	b, err := jsoniter.MarshalToString(*o)
 	if err != nil {
 		os.Stderr.WriteString(err.Error())
 	} else {
-		os.Stdout.Write(b)
-		os.Stdout.WriteString("\n")
+		backendJson = b
 	}
 }
+
+var backendJson = "init"

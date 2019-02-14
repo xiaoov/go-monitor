@@ -18,10 +18,12 @@ type reportData struct {
 	FastCount uint32
 	// 失败总数
 	FailCount uint32
-	// 失败分布 按照状态码分
-	FailDistribution map[int]uint32
-	// 时延分布情况
-	TimeConsumingDistribution []uint32
+
+	FailMsCount uint64
+	//// 失败分布 按照状态码分
+	//FailDistribution map[int]uint32
+	//// 时延分布情况
+	//TimeConsumingDistribution []uint32
 	// 条目的配置
 	Config *EntryConfig
 	// 本次统计的时间
@@ -116,8 +118,8 @@ func (c *ReportClientConfig) clearTask(curClearData *clearData) {
 		curCollectData.SuccessCount = 0
 		curCollectData.SuccessMsCount = 0
 		curCollectData.FastCount = 0
-		curCollectData.FailDistribution = map[int]uint32 {}
-		curCollectData.TimeConsumingDistribution = make([]uint32, curCollectData.Config.TimeConsumingDistributionSplit)
+		//curCollectData.FailDistribution = map[int]uint32 {}
+		//curCollectData.TimeConsumingDistribution = make([]uint32, curCollectData.Config.TimeConsumingDistributionSplit)
 	}
 }
 
@@ -128,14 +130,14 @@ func (c *ReportClientConfig) serverTask(curReportServerData *reportServer) {
 		c.collectDataMap[curReportServerData.Name] = &reportData {
 			Name: curReportServerData.Name,
 			Config: c.getEntryConfig(curReportServerData.Name),
-			FailDistribution: map[int]uint32 {},
+			//FailDistribution: map[int]uint32 {},
 		}
 	}
 	curCollectData := c.collectDataMap[curReportServerData.Name]
-	if curCollectData.TimeConsumingDistribution == nil {
-		// 先分配空间
-		curCollectData.TimeConsumingDistribution = make([]uint32, curCollectData.Config.TimeConsumingDistributionSplit)
-	}
+	//if curCollectData.TimeConsumingDistribution == nil {
+	//	// 先分配空间
+	//	curCollectData.TimeConsumingDistribution = make([]uint32, curCollectData.Config.TimeConsumingDistributionSplit)
+	//}
 	var success bool
 	if c.GetCodeFeature != nil {
 		success, _ = c.GetCodeFeature(curReportServerData.Code)
@@ -157,7 +159,7 @@ func (c *ReportClientConfig) serverTask(curReportServerData *reportServer) {
 		}
 		curCollectData.SuccessMsCount += uint64(curReportServerData.Ms)
 		// 耗时小于区间最小  归类为第一区间
-		if curReportServerData.Ms < curCollectData.Config.TimeConsumingDistributionMin {
+		/*if curReportServerData.Ms < curCollectData.Config.TimeConsumingDistributionMin {
 			curCollectData.TimeConsumingDistribution[0] += 1
 		} else if curReportServerData.Ms >= curCollectData.Config.TimeConsumingDistributionMax {
 			// 耗时大于等于区间最大  归类为最后一个区间
@@ -165,12 +167,13 @@ func (c *ReportClientConfig) serverTask(curReportServerData *reportServer) {
 		} else {
 			// 其他情况落在对应的耗时区间
 			curCollectData.TimeConsumingDistribution[(curReportServerData.Ms - curCollectData.Config.TimeConsumingDistributionMin) / curCollectData.Config.timeConsumingRange + 1] += 1
-		}
+		}*/
 		if curReportServerData.Ms <= curCollectData.Config.FastLessThan {
 			curCollectData.FastCount++
 		}
 	} else {
 		curCollectData.FailCount++
-		curCollectData.FailDistribution[curReportServerData.Code]++
+		curCollectData.FailMsCount += uint64(curReportServerData.Ms)
+		//curCollectData.FailDistribution[curReportServerData.Code]++
 	}
 }
