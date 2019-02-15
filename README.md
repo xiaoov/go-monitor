@@ -48,6 +48,7 @@ curl http://127.0.0.1:9000/monitor/json
 ```
 
 ### 参数说明： 
+```
 service.interface : service：某个服务 interface：某个接口
 m1Rate: 每一分钟移动指数的平均值（未实现）
 throughput: 吞吐量，以秒计算
@@ -63,3 +64,4 @@ errorRate：错误率
 successTotal：成功历史总数
 InternalErrorTotal：服务器内部错误历史总数
 dbErrorTotal：数据库历史错误总数
+```
