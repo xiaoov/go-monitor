@@ -23,7 +23,7 @@ type reportData struct {
 	//// 失败分布 按照状态码分
 	//FailDistribution map[int]uint32
 	//// 时延分布情况
-	//TimeConsumingDistribution []uint32
+	TimeConsumingDistribution []uint32
 	// 条目的配置
 	Config *EntryConfig
 	// 本次统计的时间
@@ -120,6 +120,7 @@ func (c *ReportClientConfig) clearTask(curClearData *clearData) {
 		curCollectData.FastCount = 0
 		//curCollectData.FailDistribution = map[int]uint32 {}
 		//curCollectData.TimeConsumingDistribution = make([]uint32, curCollectData.Config.TimeConsumingDistributionSplit)
+		curCollectData.TimeConsumingDistribution = *new([]uint32)
 	}
 }
 
@@ -134,16 +135,20 @@ func (c *ReportClientConfig) serverTask(curReportServerData *reportServer) {
 		}
 	}
 	curCollectData := c.collectDataMap[curReportServerData.Name]
-	//if curCollectData.TimeConsumingDistribution == nil {
-	//	// 先分配空间
-	//	curCollectData.TimeConsumingDistribution = make([]uint32, curCollectData.Config.TimeConsumingDistributionSplit)
-	//}
+	if curCollectData.TimeConsumingDistribution == nil {
+		// 先分配空间
+		curCollectData.TimeConsumingDistribution = *new([]uint32)
+		//curCollectData.TimeConsumingDistribution = make([]uint32, curCollectData.Config.TimeConsumingDistributionSplit)
+	}
 	var success bool
 	if c.GetCodeFeature != nil {
 		success, _ = c.GetCodeFeature(curReportServerData.Code)
 	} else if s, ok := c.CodeFeatureMap[curReportServerData.Code]; ok {
 		success = s.Success
 	}
+
+
+
 	// 命中成功状态码
 	if success {
 		curCollectData.SuccessCount++
@@ -158,6 +163,7 @@ func (c *ReportClientConfig) serverTask(curReportServerData *reportServer) {
 			curCollectData.MaxMs = curReportServerData.Ms
 		}
 		curCollectData.SuccessMsCount += uint64(curReportServerData.Ms)
+		curCollectData.TimeConsumingDistribution = append(curCollectData.TimeConsumingDistribution, curReportServerData.Ms)
 		// 耗时小于区间最小  归类为第一区间
 		/*if curReportServerData.Ms < curCollectData.Config.TimeConsumingDistributionMin {
 			curCollectData.TimeConsumingDistribution[0] += 1

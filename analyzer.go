@@ -1,6 +1,8 @@
 package monitor
 
 import (
+	"github.com/gogo/protobuf/sortkeys"
+	"math"
 	"time"
 )
 
@@ -15,27 +17,39 @@ type OutPutData struct {
 	// 调用总次数
 	Count uint32 `json:"count"`
 	// 成功总数
-	SuccessCount uint32 `json:"successCount"`
+	SuccessCount uint32 `json:"successTotal"`
 	// 成功率
 	SuccessRate float64	`json:"successRate"`
+	// 错误率
+	ErrorRate float64	`json:"errorRate"`
 	// 平均耗时
 	AverageTimeInUs uint32 `json:"averageTimeInUs"`
 	// 成功最大耗时
-	MaxMs uint32 `json:"maxMs"`
+	MaxMs uint32 `json:"maxLatencyInUs"`
 	// 成功最小耗时
 	MinMs uint32 `json:"minMs"`
-	// 时间达标总数
-	FastCount uint32 `json:"fastCount"`
-	// 时间达标率
-	FastRate float64 `json:"fastRate"`
+	//// 时间达标总数
+	//FastCount uint32 `json:"fastCount"`
+	//// 时间达标率
+	//FastRate float64 `json:"fastRate"`
 	// 失败总数
-	FailCount uint32 `json:"failCount"`
+	FailCount uint32 `json:"internalErrorCount"`
 
 	Throughput float64 `json:"throughput"`
+
+	M1Rate float64 `json:"m1Rate"`
+
+
 	// 失败分布 按照状态码分
 	//FailDistribution map[string]uint32 `json:"failDistribution"`
 	// 时延分布情况
-	//TimeConsumingDistribution map[string]uint32 `json:"timeConsumingDistribution"`
+	TimeConsumingDistribution []uint32 `json:"-"`
+
+	P95 uint32 `json:"95p"`
+
+	P99 uint32 `json:"99p"`
+
+	P999 uint32 `json:"999p"`
 }
 
 // 存储一些最近状态，以用于实现告警、恢复等机制
@@ -72,8 +86,8 @@ func (c *ReportClientConfig) statistics() {
 		outputData.InterfaceName = collectedData.Name
 		outputData.Count = collectedData.FailCount + collectedData.SuccessCount
 		outputData.SuccessRate = float64(collectedData.SuccessCount) / float64(outputData.Count)
-		outputData.FastRate = float64(collectedData.FastCount) / float64(outputData.Count)
-		outputData.FastCount = collectedData.FastCount
+		//outputData.FastRate = float64(collectedData.FastCount) / float64(outputData.Count)
+		//outputData.FastCount = collectedData.FastCount
 		outputData.AverageTimeInUs = uint32(float64(collectedData.SuccessMsCount + collectedData.FailMsCount) / float64(outputData.Count))
 		outputData.SuccessCount = collectedData.SuccessCount
 		outputData.FailCount = collectedData.FailCount
@@ -81,17 +95,26 @@ func (c *ReportClientConfig) statistics() {
 		outputData.MinMs = collectedData.MinMs
 		outputData.Timestamp = collectedData.Time.UTC()
 		outputData.Throughput = float64(outputData.Count * 1000 / uint32(c.StatisticalCycle))
-		//outputData.TimeConsumingDistribution = map[string]uint32 {}
+		outputData.ErrorRate = 1 - outputData.SuccessRate
+		outputData.M1Rate = 0
+		outputData.TimeConsumingDistribution = collectedData.TimeConsumingDistribution
 		//outputData.FailDistribution = map[string]uint32 {}
 
 
+		sortkeys.Uint32s(outputData.TimeConsumingDistribution)
+
+		outputData.P95 = outputData.TimeConsumingDistribution[int(math.Ceil(float64(len(outputData.TimeConsumingDistribution) - 1) * 0.95))]
+
+		outputData.P99 = outputData.TimeConsumingDistribution[int(math.Ceil(float64(len(outputData.TimeConsumingDistribution) - 1) * 0.99))]
+
+		outputData.P999 = outputData.TimeConsumingDistribution[int(math.Ceil(float64(len(outputData.TimeConsumingDistribution) - 1) * 0.999))]
 		// 时延分布统计
 		//scope := (collectedData.Config.TimeConsumingDistributionMax - collectedData.Config.TimeConsumingDistributionMin) / uint32(collectedData.Config.TimeConsumingDistributionSplit - 2)
-		// 计算第一个区间
+		////计算第一个区间
 		//outputData.TimeConsumingDistribution["<" + strconv.FormatUint(uint64(collectedData.Config.TimeConsumingDistributionMin), 10)] = collectedData.TimeConsumingDistribution[0]
-		//// 计算最后一个区间
-		//outputData.TimeConsumingDistribution[">" + strconv.FormatUint(uint64(collectedData.Config.TimeConsumingDistributionMax), 10)] = collectedData.TimeConsumingDistribution[collectedData.Config.TimeConsumingDistributionSplit - 1]
-		// 计算剩余区间
+		//		//// 计算最后一个区间
+		//		//outputData.TimeConsumingDistribution[">" + strconv.FormatUint(uint64(collectedData.Config.TimeConsumingDistributionMax), 10)] = collectedData.TimeConsumingDistribution[collectedData.Config.TimeConsumingDistributionSplit - 1]
+		//		// 计算剩余区间
 		//for i := 1; i < collectedData.Config.TimeConsumingDistributionSplit - 1; i++ {
 		//	start := int(collectedData.Config.TimeConsumingDistributionMin + uint32(i - 1) * scope)
 		//	var end int
@@ -100,7 +123,7 @@ func (c *ReportClientConfig) statistics() {
 		//	} else {
 		//		end = int(collectedData.Config.TimeConsumingDistributionMin + uint32(i) * scope)
 		//	}
-			//outputData.TimeConsumingDistribution[strconv.Itoa(start) + "~" + strconv.Itoa(end)] = collectedData.TimeConsumingDistribution[i]
+		//	outputData.TimeConsumingDistribution[strconv.Itoa(start) + "~" + strconv.Itoa(end)] = collectedData.TimeConsumingDistribution[i]
 		//}
 
 
@@ -120,7 +143,7 @@ func (c *ReportClientConfig) statistics() {
 		//}
 
 		// 告警分析：由于告警分析存在对定制化告警函数的调用可能性，无法预估性能，所以启用新的gorouting去执行避免不可预测的风险
-		go c.alertAnalyze(collectedData.Name, outputData)
+		//go c.alertAnalyze(collectedData.Name, outputData)
 
 		// 输出最终统计数据
 		//if c.OutputCaller != nil {
@@ -134,91 +157,91 @@ func (c *ReportClientConfig) statistics() {
 // 告警相关的分析
 func (c *ReportClientConfig) alertAnalyze(entryName string, outputData OutPutData) {
 	// 时延达标率告警和恢复分析
-	if _, ok := c.recentFastRateStatus[entryName]; !ok {
-		c.recentFastRateStatus[entryName] = &alertStatus {
-			recentAlertOutput: make([]OutPutData, 0),
-		}
-	}
-	curFastRateStatus := c.recentFastRateStatus[entryName]
-	if _, ok := c.recentSuccessRateStatus[entryName]; !ok {
-		c.recentSuccessRateStatus[entryName] = &alertStatus {
-			recentAlertOutput: make([]OutPutData, 0),
-		}
-	}
-	curSuccessRateStatus := c.recentSuccessRateStatus[entryName]
+	//if _, ok := c.recentFastRateStatus[entryName]; !ok {
+	//	c.recentFastRateStatus[entryName] = &alertStatus {
+	//		recentAlertOutput: make([]OutPutData, 0),
+	//	}
+	//}
+	//curFastRateStatus := c.recentFastRateStatus[entryName]
+	//if _, ok := c.recentSuccessRateStatus[entryName]; !ok {
+	//	c.recentSuccessRateStatus[entryName] = &alertStatus {
+	//		recentAlertOutput: make([]OutPutData, 0),
+	//	}
+	//}
+	//curSuccessRateStatus := c.recentSuccessRateStatus[entryName]
 	// 时延不达标告警只在有成功请求时才触发统计
-	if outputData.SuccessCount > 0 && outputData.FastRate < c.FastRate {
-		// 每次失败都将重置恢复计数
-		if len(curFastRateStatus.recentRecoverOutput) > 0 {
-			curFastRateStatus.recentRecoverOutput = curFastRateStatus.recentRecoverOutput[:0]
-		}
-		curFastRateStatus.recentAlertOutput = append(curFastRateStatus.recentAlertOutput, outputData)
-		if curFastRateStatus.curState == NONE && len(curFastRateStatus.recentAlertOutput) >= c.AlertForBadFastRateReachedTimes {
-			// 标记出当前告警的状态
-			curFastRateStatus.curState = SLOW
-			// 触发连续耗时不达标告警
-			if c.AlertCaller != nil {
-				c.AlertCaller(c.Name, entryName, SLOW, curFastRateStatus.recentAlertOutput)
-			} else {
-				defaultAlert(c.Name, entryName, SLOW, curFastRateStatus.recentAlertOutput)
-			}
-			curFastRateStatus.recentAlertOutput = curFastRateStatus.recentAlertOutput[:0]
-		}
-	} else {
-		// 只要一次成功就清空原有不健康记录，实测比判断长度是否大于0再去清空性能要略优
-		curFastRateStatus.recentAlertOutput = curFastRateStatus.recentAlertOutput[:0]
-		// 处于告警状态时 每次成功都累计恢复次数
-		if curFastRateStatus.curState == SLOW {
-			curFastRateStatus.recentRecoverOutput = append(curFastRateStatus.recentRecoverOutput, outputData)
-			if len(curFastRateStatus.recentRecoverOutput) >= c.AlertForGreatFastRateReachedTimes {
-				// 触发恢复通知
-				if c.RecoverCaller != nil {
-					c.RecoverCaller(c.Name, entryName, SLOW, curFastRateStatus.recentRecoverOutput)
-				} else {
-					defaultRecover(c.Name, entryName, SLOW, curFastRateStatus.recentRecoverOutput)
-				}
-				// 重置标志
-				curFastRateStatus.curState = NONE
-				curFastRateStatus.recentAlertOutput = curFastRateStatus.recentAlertOutput[:0]
-			}
-		}
-	}
+	//if outputData.SuccessCount > 0 && outputData.FastRate < c.FastRate {
+	//	// 每次失败都将重置恢复计数
+	//	if len(curFastRateStatus.recentRecoverOutput) > 0 {
+	//		curFastRateStatus.recentRecoverOutput = curFastRateStatus.recentRecoverOutput[:0]
+	//	}
+	//	curFastRateStatus.recentAlertOutput = append(curFastRateStatus.recentAlertOutput, outputData)
+	//	if curFastRateStatus.curState == NONE && len(curFastRateStatus.recentAlertOutput) >= c.AlertForBadFastRateReachedTimes {
+	//		// 标记出当前告警的状态
+	//		curFastRateStatus.curState = SLOW
+	//		// 触发连续耗时不达标告警
+	//		if c.AlertCaller != nil {
+	//			c.AlertCaller(c.Name, entryName, SLOW, curFastRateStatus.recentAlertOutput)
+	//		} else {
+	//			defaultAlert(c.Name, entryName, SLOW, curFastRateStatus.recentAlertOutput)
+	//		}
+	//		curFastRateStatus.recentAlertOutput = curFastRateStatus.recentAlertOutput[:0]
+	//	}
+	//} else {
+	//	// 只要一次成功就清空原有不健康记录，实测比判断长度是否大于0再去清空性能要略优
+	//	curFastRateStatus.recentAlertOutput = curFastRateStatus.recentAlertOutput[:0]
+	//	// 处于告警状态时 每次成功都累计恢复次数
+	//	if curFastRateStatus.curState == SLOW {
+	//		curFastRateStatus.recentRecoverOutput = append(curFastRateStatus.recentRecoverOutput, outputData)
+	//		if len(curFastRateStatus.recentRecoverOutput) >= c.AlertForGreatFastRateReachedTimes {
+	//			// 触发恢复通知
+	//			if c.RecoverCaller != nil {
+	//				c.RecoverCaller(c.Name, entryName, SLOW, curFastRateStatus.recentRecoverOutput)
+	//			} else {
+	//				defaultRecover(c.Name, entryName, SLOW, curFastRateStatus.recentRecoverOutput)
+	//			}
+	//			// 重置标志
+	//			curFastRateStatus.curState = NONE
+	//			curFastRateStatus.recentAlertOutput = curFastRateStatus.recentAlertOutput[:0]
+	//		}
+	//	}
+	//}
 
 	// 访问成功率告警与恢复分析
-	if outputData.SuccessRate < c.SuccessRate {
-		// 每次失败都将重置恢复计数
-		if len(curSuccessRateStatus.recentRecoverOutput) > 0 {
-			curSuccessRateStatus.recentRecoverOutput = curSuccessRateStatus.recentRecoverOutput[:0]
-		}
-		curSuccessRateStatus.recentAlertOutput = append(curSuccessRateStatus.recentAlertOutput, outputData)
-		if curSuccessRateStatus.curState == NONE && len(curSuccessRateStatus.recentAlertOutput) >= c.AlertForBadSuccessRateReachedTimes {
-			// 标记出当前告警的状态
-			curSuccessRateStatus.curState = FAIL
-			// 触发连续耗时不达标告警
-			if c.AlertCaller != nil {
-				c.AlertCaller(c.Name, entryName, FAIL, curSuccessRateStatus.recentAlertOutput)
-			} else {
-				defaultAlert(c.Name, entryName, FAIL, curSuccessRateStatus.recentAlertOutput)
-			}
-			curSuccessRateStatus.recentAlertOutput = curSuccessRateStatus.recentAlertOutput[:0]
-		}
-	} else {
-		// 只要一次成功就清空原有不健康记录
-		curSuccessRateStatus.recentAlertOutput = curSuccessRateStatus.recentAlertOutput[:0]
-		// 处于告警状态时 每次成功都累计恢复次数
-		if curSuccessRateStatus.curState == FAIL {
-			curSuccessRateStatus.recentRecoverOutput = append(curSuccessRateStatus.recentRecoverOutput, outputData)
-			if len(curSuccessRateStatus.recentRecoverOutput) >= c.AlertForGreatSuccessRateReachedTimes {
-				// 触发恢复通知
-				if c.RecoverCaller != nil {
-					c.RecoverCaller(c.Name, entryName, FAIL, curSuccessRateStatus.recentRecoverOutput)
-				} else {
-					defaultRecover(c.Name, entryName, FAIL, curSuccessRateStatus.recentRecoverOutput)
-				}
-				// 重置标志
-				curSuccessRateStatus.curState = NONE
-				curSuccessRateStatus.recentAlertOutput = curSuccessRateStatus.recentAlertOutput[:0]
-			}
-		}
-	}
+	//if outputData.SuccessRate < c.SuccessRate {
+	//	// 每次失败都将重置恢复计数
+	//	if len(curSuccessRateStatus.recentRecoverOutput) > 0 {
+	//		curSuccessRateStatus.recentRecoverOutput = curSuccessRateStatus.recentRecoverOutput[:0]
+	//	}
+	//	curSuccessRateStatus.recentAlertOutput = append(curSuccessRateStatus.recentAlertOutput, outputData)
+	//	if curSuccessRateStatus.curState == NONE && len(curSuccessRateStatus.recentAlertOutput) >= c.AlertForBadSuccessRateReachedTimes {
+	//		// 标记出当前告警的状态
+	//		curSuccessRateStatus.curState = FAIL
+	//		// 触发连续耗时不达标告警
+	//		if c.AlertCaller != nil {
+	//			c.AlertCaller(c.Name, entryName, FAIL, curSuccessRateStatus.recentAlertOutput)
+	//		} else {
+	//			defaultAlert(c.Name, entryName, FAIL, curSuccessRateStatus.recentAlertOutput)
+	//		}
+	//		curSuccessRateStatus.recentAlertOutput = curSuccessRateStatus.recentAlertOutput[:0]
+	//	}
+	//} else {
+	//	// 只要一次成功就清空原有不健康记录
+	//	curSuccessRateStatus.recentAlertOutput = curSuccessRateStatus.recentAlertOutput[:0]
+	//	// 处于告警状态时 每次成功都累计恢复次数
+	//	if curSuccessRateStatus.curState == FAIL {
+	//		curSuccessRateStatus.recentRecoverOutput = append(curSuccessRateStatus.recentRecoverOutput, outputData)
+	//		if len(curSuccessRateStatus.recentRecoverOutput) >= c.AlertForGreatSuccessRateReachedTimes {
+	//			// 触发恢复通知
+	//			if c.RecoverCaller != nil {
+	//				c.RecoverCaller(c.Name, entryName, FAIL, curSuccessRateStatus.recentRecoverOutput)
+	//			} else {
+	//				defaultRecover(c.Name, entryName, FAIL, curSuccessRateStatus.recentRecoverOutput)
+	//			}
+	//			// 重置标志
+	//			curSuccessRateStatus.curState = NONE
+	//			curSuccessRateStatus.recentAlertOutput = curSuccessRateStatus.recentAlertOutput[:0]
+	//		}
+	//	}
+	//}
 }
