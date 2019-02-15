@@ -186,7 +186,13 @@ func helloHandler(w http.ResponseWriter, _ *http.Request) {
 
 // 默认输出回调函数，将直接打印到控制台
 func monit(o map[string]OutPutData) {
-	b, err := jsoniter.MarshalToString(o)
+	type monitorJson struct {
+		Value map[string]OutPutData `json:"value"`
+	}
+
+	m := &monitorJson{}
+	m.Value = o
+	b, err := jsoniter.MarshalToString(m)
 	if err != nil {
 		os.Stderr.WriteString(err.Error())
 	} else {

@@ -33,7 +33,10 @@ type OutPutData struct {
 	//// 时间达标率
 	//FastRate float64 `json:"fastRate"`
 	// 失败总数
-	FailCount uint32 `json:"internalErrorCount"`
+	//FailCount uint32 `json:"internalErrorCount"`
+
+	InternalErrorCount uint32 `json:"internalErrorCount"`
+	DBErrorCount uint32 `json:"dbErrorCount"`
 
 	Throughput float64 `json:"throughput"`
 
@@ -92,13 +95,15 @@ func (c *ReportClientConfig) statistics() {
 		outputData := OutPutData {}
 		outputData.ClientName = c.Name
 		outputData.InterfaceName = collectedData.Name
-		outputData.Count = collectedData.FailCount + collectedData.SuccessCount
+		outputData.Count = collectedData.InternalErrorCount + collectedData.DBErrorCount + collectedData.SuccessCount
 		outputData.SuccessRate = float64(collectedData.SuccessCount) / float64(outputData.Count)
 		//outputData.FastRate = float64(collectedData.FastCount) / float64(outputData.Count)
 		//outputData.FastCount = collectedData.FastCount
 		outputData.AverageTimeInUs = uint32(float64(collectedData.SuccessMsCount + collectedData.FailMsCount) / float64(outputData.Count))
 		outputData.SuccessCount = collectedData.SuccessCount
-		outputData.FailCount = collectedData.FailCount
+		//outputData.FailCount = collectedData.FailCount
+		outputData.InternalErrorCount = collectedData.InternalErrorCount
+		outputData.DBErrorCount = collectedData.DBErrorCount
 		outputData.MaxMs = collectedData.MaxMs
 		outputData.MinMs = collectedData.MinMs
 		outputData.Timestamp = collectedData.Time.UTC()
@@ -165,7 +170,7 @@ func (c *ReportClientConfig) statistics() {
 		//	// 同理，但凡外部自定义函数的调用应当启用新的gorouting去执行
 		//	go c.OutputCaller(&outputData)
 		//}
-		staticCollectedDataSet[outputData.InterfaceName] = outputData
+		staticCollectedDataSet[outputData.ClientName+ "." +outputData.InterfaceName] = outputData
 		monit(staticCollectedDataSet)
 	}
 }

@@ -17,7 +17,11 @@ type reportData struct {
 	// 时间达标总数
 	FastCount uint32
 	// 失败总数
-	FailCount uint32
+	//FailCount uint32
+
+	InternalErrorCount uint32
+
+	DBErrorCount uint32
 
 	FailMsCount uint64
 	//// 失败分布 按照状态码分
@@ -106,7 +110,7 @@ func (c *ReportClientConfig) collect() {
 func (c *ReportClientConfig) clearTask(curClearData *clearData) {
 	curCollectData := c.collectDataMap[curClearData.Name]
 	// 只在有上报记录时才做清理
-	if curCollectData.SuccessCount != 0 || curCollectData.FailCount != 0 {
+	if curCollectData.SuccessCount != 0 || curCollectData.InternalErrorCount != 0 || curCollectData.DBErrorCount != 0{
 		collectedData := *curCollectData
 		collectedData.Time = curClearData.Time
 		// 拷贝一份数据流入分析
@@ -114,9 +118,12 @@ func (c *ReportClientConfig) clearTask(curClearData *clearData) {
 		// 清空旧数据
 		curCollectData.MinMs = 0
 		curCollectData.MaxMs = 0
-		curCollectData.FailCount = 0
+		//curCollectData.FailCount = 0
+		curCollectData.InternalErrorCount = 0
+		curCollectData.DBErrorCount = 0
 		curCollectData.SuccessCount = 0
 		curCollectData.SuccessMsCount = 0
+		curCollectData.FailMsCount = 0
 		curCollectData.FastCount = 0
 		//curCollectData.FailDistribution = map[int]uint32 {}
 		//curCollectData.TimeConsumingDistribution = make([]uint32, curCollectData.Config.TimeConsumingDistributionSplit)
@@ -150,19 +157,20 @@ func (c *ReportClientConfig) serverTask(curReportServerData *reportServer) {
 
 	curCollectData.TimeConsumingDistribution = append(curCollectData.TimeConsumingDistribution, curReportServerData.Ms)
 
+	if curCollectData.MinMs == 0 {
+		curCollectData.MinMs = curReportServerData.Ms
+	} else if curReportServerData.Ms < curCollectData.MinMs {
+		curCollectData.MinMs = curReportServerData.Ms
+	}
+	if curCollectData.MaxMs == 0 {
+		curCollectData.MaxMs = curReportServerData.Ms
+	} else if curReportServerData.Ms > curCollectData.MaxMs {
+		curCollectData.MaxMs = curReportServerData.Ms
+	}
+
 	// 命中成功状态码
 	if success {
 		curCollectData.SuccessCount++
-		if curCollectData.MinMs == 0 {
-			curCollectData.MinMs = curReportServerData.Ms
-		} else if curReportServerData.Ms < curCollectData.MinMs {
-			curCollectData.MinMs = curReportServerData.Ms
-		}
-		if curCollectData.MaxMs == 0 {
-			curCollectData.MaxMs = curReportServerData.Ms
-		} else if curReportServerData.Ms > curCollectData.MaxMs {
-			curCollectData.MaxMs = curReportServerData.Ms
-		}
 		curCollectData.SuccessMsCount += uint64(curReportServerData.Ms)
 		// 耗时小于区间最小  归类为第一区间
 		/*if curReportServerData.Ms < curCollectData.Config.TimeConsumingDistributionMin {
@@ -178,7 +186,12 @@ func (c *ReportClientConfig) serverTask(curReportServerData *reportServer) {
 			curCollectData.FastCount++
 		}
 	} else {
-		curCollectData.FailCount++
+		if curReportServerData.Code == RESULT_DBERROR {
+			curCollectData.DBErrorCount++
+		}else if curReportServerData.Code == RESULT_INTERNALERROR {
+			curCollectData.InternalErrorCount++
+		}
+		//curCollectData.FailCount++
 		curCollectData.FailMsCount += uint64(curReportServerData.Ms)
 		//curCollectData.FailDistribution[curReportServerData.Code]++
 	}
