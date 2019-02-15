@@ -1,8 +1,8 @@
 package monitor
 
 import (
-	"github.com/gogo/protobuf/sortkeys"
 	"math"
+	"sort"
 	"time"
 )
 
@@ -52,6 +52,13 @@ type OutPutData struct {
 	P999 uint32 `json:"999p"`
 }
 
+type TimeConsumingDistributionType []uint32
+
+func (p TimeConsumingDistributionType) Len() int           { return len(p) }
+func (p TimeConsumingDistributionType) Less(i, j int) bool { return p[i] > p[j] }
+func (p TimeConsumingDistributionType) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+
 // 存储一些最近状态，以用于实现告警、恢复等机制
 type alertStatus struct {
 	recentAlertOutput   []OutPutData // 最近连续几次失败的数据
@@ -79,6 +86,7 @@ func (c *ReportClientConfig) scheduleTask() {
 // 分析统计
 func (c *ReportClientConfig) statistics() {
 	// 以具体条目为单位进行统计分析
+	staticCollectedDataSet := make(map[string]OutPutData)
 	for collectedData := range c.statisticsChannel {
 		// 常规指标统计
 		outputData := OutPutData {}
@@ -101,13 +109,20 @@ func (c *ReportClientConfig) statistics() {
 		//outputData.FailDistribution = map[string]uint32 {}
 
 
-		sortkeys.Uint32s(outputData.TimeConsumingDistribution)
+		sort.Sort(TimeConsumingDistributionType(outputData.TimeConsumingDistribution))
 
-		outputData.P95 = outputData.TimeConsumingDistribution[int(math.Ceil(float64(len(outputData.TimeConsumingDistribution) - 1) * 0.95))]
+		//sortkeys.Uint32s(outputData.TimeConsumingDistribution)
 
-		outputData.P99 = outputData.TimeConsumingDistribution[int(math.Ceil(float64(len(outputData.TimeConsumingDistribution) - 1) * 0.99))]
+		//log.Println("int(math.Ceil(float64(len(outputData.TimeConsumingDistribution) - 1) * 0.95))", int(math.Ceil(float64(len(outputData.TimeConsumingDistribution) - 1) * 0.95)))
+		//log.Println("len(outputData.TimeConsumingDistribution)", len(outputData.TimeConsumingDistribution))
 
-		outputData.P999 = outputData.TimeConsumingDistribution[int(math.Ceil(float64(len(outputData.TimeConsumingDistribution) - 1) * 0.999))]
+		if len(outputData.TimeConsumingDistribution) != 0 {
+			outputData.P95 = outputData.TimeConsumingDistribution[int(math.Ceil(float64(len(outputData.TimeConsumingDistribution) - 1) * 0.95))]
+
+			outputData.P99 = outputData.TimeConsumingDistribution[int(math.Ceil(float64(len(outputData.TimeConsumingDistribution) - 1) * 0.99))]
+
+			outputData.P999 = outputData.TimeConsumingDistribution[int(math.Ceil(float64(len(outputData.TimeConsumingDistribution) - 1) * 0.999))]
+		}
 		// 时延分布统计
 		//scope := (collectedData.Config.TimeConsumingDistributionMax - collectedData.Config.TimeConsumingDistributionMin) / uint32(collectedData.Config.TimeConsumingDistributionSplit - 2)
 		////计算第一个区间
@@ -150,7 +165,8 @@ func (c *ReportClientConfig) statistics() {
 		//	// 同理，但凡外部自定义函数的调用应当启用新的gorouting去执行
 		//	go c.OutputCaller(&outputData)
 		//}
-		monit(&outputData)
+		staticCollectedDataSet[outputData.InterfaceName] = outputData
+		monit(staticCollectedDataSet)
 	}
 }
 

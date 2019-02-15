@@ -31,6 +31,12 @@ const (
 	CLEAR
 )
 
+const (
+	RESULT_SUCCESS = iota
+	RESULT_INTERNALERROR
+	RESULT_DBERROR
+)
+
 
 // 一个客户端实例所拥有的方法
 type ReportClient interface {
@@ -139,8 +145,17 @@ func Register(c ReportClientConfig) ReportClient {
 	// 如果没有指定自定义code特征识别函数，且状态码映射为空，则启用默认的机制
 	if c.GetCodeFeature == nil && c.CodeFeatureMap == nil {
 		c.CodeFeatureMap = map[int]CodeFeature {
-			200: {
+			RESULT_SUCCESS: {
 				Success: true,
+				Name: "success",
+			},
+			RESULT_INTERNALERROR: {
+				Success: false,
+				Name: "internalError",
+			},
+			RESULT_DBERROR: {
+				Success: false,
+				Name: "DBError",
 			},
 		}
 	}
@@ -170,12 +185,13 @@ func helloHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 // 默认输出回调函数，将直接打印到控制台
-func monit(o *OutPutData) {
-	b, err := jsoniter.MarshalToString(*o)
+func monit(o map[string]OutPutData) {
+	b, err := jsoniter.MarshalToString(o)
 	if err != nil {
 		os.Stderr.WriteString(err.Error())
 	} else {
 		backendJson = b
+		//log.Println(b)
 	}
 }
 

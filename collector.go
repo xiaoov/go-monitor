@@ -148,6 +148,7 @@ func (c *ReportClientConfig) serverTask(curReportServerData *reportServer) {
 	}
 
 
+	curCollectData.TimeConsumingDistribution = append(curCollectData.TimeConsumingDistribution, curReportServerData.Ms)
 
 	// 命中成功状态码
 	if success {
@@ -163,7 +164,6 @@ func (c *ReportClientConfig) serverTask(curReportServerData *reportServer) {
 			curCollectData.MaxMs = curReportServerData.Ms
 		}
 		curCollectData.SuccessMsCount += uint64(curReportServerData.Ms)
-		curCollectData.TimeConsumingDistribution = append(curCollectData.TimeConsumingDistribution, curReportServerData.Ms)
 		// 耗时小于区间最小  归类为第一区间
 		/*if curReportServerData.Ms < curCollectData.Config.TimeConsumingDistributionMin {
 			curCollectData.TimeConsumingDistribution[0] += 1
