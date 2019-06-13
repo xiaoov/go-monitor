@@ -28,12 +28,6 @@ type OutPutData struct {
 	MaxMs uint32 `json:"maxLatencyInUs"`
 	// 成功最小耗时
 	MinMs uint32 `json:"minMs"`
-	//// 时间达标总数
-	//FastCount uint32 `json:"fastCount"`
-	//// 时间达标率
-	//FastRate float64 `json:"fastRate"`
-	// 失败总数
-	//FailCount uint32 `json:"internalErrorCount"`
 
 	InternalErrorCount uint32 `json:"internalErrorCount"`
 	DBErrorCount uint32 `json:"dbErrorCount"`
@@ -42,9 +36,6 @@ type OutPutData struct {
 
 	M1Rate float64 `json:"m1Rate"`
 
-
-	// 失败分布 按照状态码分
-	//FailDistribution map[string]uint32 `json:"failDistribution"`
 	// 时延分布情况
 	TimeConsumingDistribution []uint32 `json:"-"`
 

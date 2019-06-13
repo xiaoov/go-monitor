@@ -56,14 +56,6 @@ type ReportClientConfig struct {
 	DefaultFastTime uint32
 	// 统计周期，默认为1分钟，不超过10分钟（避免周期过长，存储统计数据的变量溢出），单位ms
 	StatisticalCycle int
-	// 成功率连续不达标多少个统计周期发出告警，默认3
-	AlertForBadSuccessRateReachedTimes int
-	// 耗时连续不达标多少个统计周期发出告警，默认3
-	AlertForBadFastRateReachedTimes	int
-	// 成功率连续达标多少个统计周期发出恢复报告，默认3
-	AlertForGreatSuccessRateReachedTimes int
-	// 耗时连续达标多少个统计周期发出恢复报告，默认3
-	AlertForGreatFastRateReachedTimes	int
 	// 成功率多少以上算通过，1表示100%，默认0.95
 	SuccessRate	float64
 	// 高效访问率多少以上算通过，1表示100%，默认0.8
@@ -76,12 +68,6 @@ type ReportClientConfig struct {
 	GetCodeFeature func(code int) (success bool, name string)
 	// 失败分布统计出报表时，如果没有在DefaultSuccessStatus定义过该状态的Name属性，将默认将DefaultFailDistributionFormat中的%code转化为对应的code并作为报表项，该值默认为"code[%code]"
 	DefaultFailDistributionFormat string
-	// 接受数据输出定制，默认输出到控制台
-	//OutputCaller func(o *OutPutData)
-	// 告警处理方式定制，默认输出到控制台，目前alertType取值为FAIL代表成功率告警，SLOW代表耗时告警
-	AlertCaller func(clientName string, interfaceName string, alertType AlertType, recentOutputData []OutPutData)
-	// 恢复通知处理方式定制，同AlertCaller
-	RecoverCaller func(clientName string, interfaceName string, alertType AlertType, recentOutputData []OutPutData)
 
 	// 自定义url或命名关于耗时达标，分布区间等属性。为了维持内部key的一致性，需要调用方法来设置这个属性
 	entryConfigMap map[string]EntryConfig
@@ -111,18 +97,6 @@ func Register(c ReportClientConfig) ReportClient {
 	// 最大允许5分钟一个统计周期
 	if c.StatisticalCycle <= 0 || c.StatisticalCycle > 300000 {
 		c.StatisticalCycle = 60000
-	}
-	if c.AlertForBadFastRateReachedTimes < 3 {
-		c.AlertForBadFastRateReachedTimes = 3
-	}
-	if c.AlertForGreatFastRateReachedTimes < 3 {
-		c.AlertForGreatFastRateReachedTimes = 3
-	}
-	if c.AlertForBadSuccessRateReachedTimes < 3 {
-		c.AlertForBadSuccessRateReachedTimes = 3
-	}
-	if c.AlertForGreatSuccessRateReachedTimes < 3 {
-		c.AlertForGreatSuccessRateReachedTimes = 3
 	}
 	if c.SuccessRate == 0 {
 		c.SuccessRate = 0.95

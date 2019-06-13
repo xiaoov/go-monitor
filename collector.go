@@ -118,15 +118,12 @@ func (c *ReportClientConfig) clearTask(curClearData *clearData) {
 		// 清空旧数据
 		curCollectData.MinMs = 0
 		curCollectData.MaxMs = 0
-		//curCollectData.FailCount = 0
 		curCollectData.InternalErrorCount = 0
 		curCollectData.DBErrorCount = 0
 		curCollectData.SuccessCount = 0
 		curCollectData.SuccessMsCount = 0
 		curCollectData.FailMsCount = 0
 		curCollectData.FastCount = 0
-		//curCollectData.FailDistribution = map[int]uint32 {}
-		//curCollectData.TimeConsumingDistribution = make([]uint32, curCollectData.Config.TimeConsumingDistributionSplit)
 		curCollectData.TimeConsumingDistribution = *new([]uint32)
 	}
 }
@@ -172,16 +169,6 @@ func (c *ReportClientConfig) serverTask(curReportServerData *reportServer) {
 	if success {
 		curCollectData.SuccessCount++
 		curCollectData.SuccessMsCount += uint64(curReportServerData.Ms)
-		// 耗时小于区间最小  归类为第一区间
-		/*if curReportServerData.Ms < curCollectData.Config.TimeConsumingDistributionMin {
-			curCollectData.TimeConsumingDistribution[0] += 1
-		} else if curReportServerData.Ms >= curCollectData.Config.TimeConsumingDistributionMax {
-			// 耗时大于等于区间最大  归类为最后一个区间
-			curCollectData.TimeConsumingDistribution[curCollectData.Config.TimeConsumingDistributionSplit - 1] += 1
-		} else {
-			// 其他情况落在对应的耗时区间
-			curCollectData.TimeConsumingDistribution[(curReportServerData.Ms - curCollectData.Config.TimeConsumingDistributionMin) / curCollectData.Config.timeConsumingRange + 1] += 1
-		}*/
 		if curReportServerData.Ms <= curCollectData.Config.FastLessThan {
 			curCollectData.FastCount++
 		}
@@ -191,8 +178,6 @@ func (c *ReportClientConfig) serverTask(curReportServerData *reportServer) {
 		}else if curReportServerData.Code == RESULT_INTERNALERROR {
 			curCollectData.InternalErrorCount++
 		}
-		//curCollectData.FailCount++
 		curCollectData.FailMsCount += uint64(curReportServerData.Ms)
-		//curCollectData.FailDistribution[curReportServerData.Code]++
 	}
 }
